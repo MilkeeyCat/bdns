@@ -1,6 +1,10 @@
 package wire
 
-import "github.com/MilkeeyCat/bdns/record"
+import (
+	"encoding/binary"
+
+	"github.com/MilkeeyCat/bdns/record"
+)
 
 func parseType(code uint16) (record.Type, error) {
 	switch code {
@@ -54,4 +58,46 @@ func parseClass(code uint16) (record.Class, error) {
 	default:
 		return 0, ErrInvalidMessage
 	}
+}
+
+func ParseResourceRecord(buf []byte, offset uint) (record.Record, uint, error) {
+	domain, domainSize, err := ParseDomain(buf, offset)
+	if err != nil {
+		return record.Record{}, 0, err
+	}
+
+	buf = buf[offset+uint(domainSize):]
+
+	const staticDataSize = 2 + 2 + 4 + 2
+
+	if len(buf) < staticDataSize {
+		return record.Record{}, 0, ErrShortMessage
+	}
+
+	ty, err := parseType(binary.BigEndian.Uint16(buf))
+	if err != nil {
+		return record.Record{}, 0, err
+	}
+
+	class, err := parseClass(binary.BigEndian.Uint16(buf[2:]))
+	if err != nil {
+		return record.Record{}, 0, err
+	}
+
+	ttl := binary.BigEndian.Uint32(buf[4:])
+	rdLength := binary.BigEndian.Uint16(buf[8:])
+
+	if len(buf) < int(rdLength)+staticDataSize {
+		return record.Record{}, 0, ErrShortMessage
+	}
+
+	size := uint(domainSize) + staticDataSize + uint(rdLength)
+
+	return record.Record{
+		Name:  domain,
+		Type:  ty,
+		Class: class,
+		TTL:   ttl,
+		Data:  buf[staticDataSize : rdLength+staticDataSize],
+	}, size, nil
 }
