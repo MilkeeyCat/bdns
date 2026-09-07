@@ -1,6 +1,10 @@
 package wire
 
-import "github.com/MilkeeyCat/bdns/message"
+import (
+	"encoding/binary"
+
+	"github.com/MilkeeyCat/bdns/message"
+)
 
 const HeaderSize = 12
 
@@ -49,7 +53,7 @@ type Header struct {
 func ParseHeader(buf [HeaderSize]byte) (Header, error) {
 	var opcode message.QueryOpcode
 
-	switch (buf[2] & 0b01111000) >> 3 {
+	switch (buf[2] & 0b0111_1000) >> 3 {
 	case 0:
 		opcode = message.QueryOpcodeStandard
 	case 1:
@@ -62,7 +66,7 @@ func ParseHeader(buf [HeaderSize]byte) (Header, error) {
 
 	var rcode message.ResponseCode
 
-	switch buf[3] & 0b00001111 {
+	switch buf[3] & 0b0000_1111 {
 	case 0:
 		rcode = message.ResponseCodeNone
 	case 1:
@@ -80,17 +84,17 @@ func ParseHeader(buf [HeaderSize]byte) (Header, error) {
 	}
 
 	return Header{
-		ID:      (uint16(buf[0]) << 8) | uint16(buf[1]),
-		QR:      (buf[2] & 0b10000000) != 0,
+		ID:      binary.BigEndian.Uint16(buf[0:]),
+		QR:      (buf[2] & 0b1000_0000) != 0,
 		Opcode:  opcode,
-		AA:      (buf[2] & 0b00000100) != 0,
-		TC:      (buf[2] & 0b00000010) != 0,
-		RD:      (buf[2] & 0b00000001) != 0,
-		RA:      (buf[3] & 0b10000000) != 0,
+		AA:      (buf[2] & 0b0000_0100) != 0,
+		TC:      (buf[2] & 0b0000_0010) != 0,
+		RD:      (buf[2] & 0b0000_0001) != 0,
+		RA:      (buf[3] & 0b1000_0000) != 0,
 		RCode:   rcode,
-		QDCount: (uint16(buf[4]) << 8) | uint16(buf[5]),
-		ANCount: (uint16(buf[6]) << 8) | uint16(buf[7]),
-		NSCount: (uint16(buf[8]) << 8) | uint16(buf[9]),
-		ARCount: (uint16(buf[10]) << 8) | uint16(buf[11]),
+		QDCount: binary.BigEndian.Uint16(buf[4:]),
+		ANCount: binary.BigEndian.Uint16(buf[6:]),
+		NSCount: binary.BigEndian.Uint16(buf[8:]),
+		ARCount: binary.BigEndian.Uint16(buf[10:]),
 	}, nil
 }

@@ -1,6 +1,10 @@
 package wire
 
-import "github.com/MilkeeyCat/bdns/message"
+import (
+	"encoding/binary"
+
+	"github.com/MilkeeyCat/bdns/message"
+)
 
 func parseQueryType(code uint16) (message.QueryType, error) {
 	switch code {
@@ -48,12 +52,12 @@ func ParseQuestion(buf []byte, offset uint) (message.Question, uint, error) {
 		return message.Question{}, 0, ErrShortMessage
 	}
 
-	queryType, err := parseQueryType((uint16(buf[0]) << 8) | uint16(buf[1]))
+	queryType, err := parseQueryType(binary.BigEndian.Uint16(buf[0:]))
 	if err != nil {
 		return message.Question{}, 0, err
 	}
 
-	queryClass, err := parseQueryClass((uint16(buf[2]) << 8) | uint16(buf[3]))
+	queryClass, err := parseQueryClass(binary.BigEndian.Uint16(buf[2:]))
 	if err != nil {
 		return message.Question{}, 0, err
 	}

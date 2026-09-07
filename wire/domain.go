@@ -18,13 +18,13 @@ func parseDomain(buf, cur []byte, domain domain.Domain, size uint8, offsets map[
 
 		length := cur[0]
 
-		switch length & 0b11000000 {
-		case 0b11000000:
+		switch length & 0b1100_0000 {
+		case 0b1100_0000:
 			if len(cur) < 2 {
 				return nil, 0, ErrShortMessage
 			}
 
-			offset := (uint16(length&0b00111111) << 8) | uint16(cur[1])
+			offset := (uint16(length&0b0011_1111) << 8) | uint16(cur[1])
 
 			if _, ok := offsets[offset]; ok {
 				return nil, 0, ErrInvalidMessage
