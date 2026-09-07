@@ -19,7 +19,7 @@ func TestDomain(t *testing.T) {
 	}{
 		{
 			name:   "not compressed",
-			input:  []byte{0x1, 'f', 0x3, 'i', 's', 'i', 0x0},
+			input:  []byte{0x01, 'f', 0x03, 'i', 's', 'i', 0x00},
 			offset: 0,
 			domain: new("f.isi."),
 			size:   new(uint8(7)),
@@ -28,8 +28,8 @@ func TestDomain(t *testing.T) {
 		{
 			name: "compressed",
 			input: []byte{
-				0x1, 'm', 0x3, 'i', 's', 'i', 0x4, 'a', 'r', 'p', 'a', 0x0,
-				0x3, 'f', 'o', 'o', 0xc0, 0x0,
+				0x01, 'm', 0x03, 'i', 's', 'i', 0x04, 'a', 'r', 'p', 'a', 0x00,
+				0x03, 'f', 'o', 'o', 0xc0, 0x00,
 			},
 			offset: 12,
 			domain: new("foo.m.isi.arpa."),
@@ -38,7 +38,7 @@ func TestDomain(t *testing.T) {
 		},
 		{
 			name:   "compressed with cycle",
-			input:  []byte{0x3, 'f', 'o', 'o', 0xc0, 0x0},
+			input:  []byte{0x03, 'f', 'o', 'o', 0xc0, 0x00},
 			offset: 0,
 			domain: nil,
 			size:   nil,
@@ -46,7 +46,7 @@ func TestDomain(t *testing.T) {
 		},
 		{
 			name:   "compressed with offset out of bounds",
-			input:  []byte{0x3, 'f', 'o', 'o', 0xc0, 0xff},
+			input:  []byte{0x03, 'f', 'o', 'o', 0xc0, 0xff},
 			offset: 0,
 			domain: nil,
 			size:   nil,
