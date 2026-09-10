@@ -68,10 +68,10 @@ func TestParseHeader(t *testing.T) {
 	for _, tc := range tests {
 		header, err := wire.ParseHeader(tc.input)
 
+		assert.Equal(t, tc.err, err)
+
 		if tc.header != nil {
 			assert.Equal(t, *tc.header, header)
 		}
-
-		assert.Equal(t, tc.err, err)
 	}
 }
