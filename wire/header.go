@@ -2,6 +2,7 @@ package wire
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/MilkeeyCat/bdns/message"
 )
@@ -68,4 +69,62 @@ func ParseHeader(buf [HeaderSize]byte) (Header, error) {
 		NSCount: binary.BigEndian.Uint16(buf[8:]),
 		ARCount: binary.BigEndian.Uint16(buf[10:]),
 	}, nil
+}
+
+func EncodeHeader(header Header) [HeaderSize]byte {
+	var buf [HeaderSize]byte
+	var opcode uint8
+
+	switch header.Opcode {
+	case message.QueryOpcodeStandard:
+		opcode = 0
+	case message.QueryOpcodeInverse:
+		opcode = 1
+	case message.QueryOpcodeServerStatus:
+		opcode = 2
+	default:
+		panic(fmt.Sprintf("unexpected message.QueryOpcode: %d", header.Opcode))
+	}
+
+	var rcode uint8
+
+	switch header.RCode {
+	case message.ResponseCodeNone:
+		rcode = 0
+	case message.ResponseCodeFormatError:
+		rcode = 1
+	case message.ResponseCodeServerFailure:
+		rcode = 2
+	case message.ResponseCodeNameError:
+		rcode = 3
+	case message.ResponseCodeNotImplemented:
+		rcode = 4
+	case message.ResponseCodeRefused:
+		rcode = 5
+	default:
+		panic(fmt.Sprintf("unexpected message.ResponseCode: %d", header.RCode))
+	}
+
+	binary.BigEndian.PutUint16(buf[0:], header.ID)
+	buf[2] |= boolToUint8(header.QR) << 7
+	buf[2] |= opcode << 3
+	buf[2] |= boolToUint8(header.AA) << 2
+	buf[2] |= boolToUint8(header.TC) << 1
+	buf[2] |= boolToUint8(header.RD)
+	buf[3] |= boolToUint8(header.RA) << 7
+	buf[3] |= rcode
+	binary.BigEndian.PutUint16(buf[4:], header.QDCount)
+	binary.BigEndian.PutUint16(buf[6:], header.ANCount)
+	binary.BigEndian.PutUint16(buf[8:], header.NSCount)
+	binary.BigEndian.PutUint16(buf[10:], header.ARCount)
+
+	return buf
+}
+
+func boolToUint8(b bool) uint8 {
+	if b {
+		return 1
+	}
+
+	return 0
 }

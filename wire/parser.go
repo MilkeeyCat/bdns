@@ -17,9 +17,9 @@ type Parser struct {
 	r *bytes.Reader
 }
 
-type Option func(*Parser)
+type ParserOption func(*Parser)
 
-func WithOffset(offset uint) Option {
+func WithOffset(offset uint) ParserOption {
 	return func(p *Parser) {
 		if _, err := p.r.Seek(int64(offset), io.SeekStart); err != nil {
 			panic(err)
@@ -27,7 +27,7 @@ func WithOffset(offset uint) Option {
 	}
 }
 
-func NewParser(buf []byte, options ...Option) *Parser {
+func NewParser(buf []byte, options ...ParserOption) *Parser {
 	p := &Parser{
 		r: bytes.NewReader(buf),
 	}

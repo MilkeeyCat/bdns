@@ -75,3 +75,51 @@ func TestParseHeader(t *testing.T) {
 		}
 	}
 }
+
+func TestEncodeHeader(t *testing.T) {
+	tests := []struct {
+		header wire.Header
+		output [wire.HeaderSize]byte
+	}{
+		{
+			header: wire.Header{
+				ID:      0xce5d,
+				QR:      false,
+				Opcode:  message.QueryOpcodeStandard,
+				AA:      false,
+				TC:      false,
+				RD:      true,
+				RA:      false,
+				RCode:   message.ResponseCodeNone,
+				QDCount: 1,
+				ANCount: 2,
+				NSCount: 3,
+				ARCount: 4,
+			},
+			output: [wire.HeaderSize]byte{0xce, 0x5d, 0x01, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04},
+		},
+		{
+			header: wire.Header{
+				ID:      0x6a4c,
+				QR:      false,
+				Opcode:  message.QueryOpcodeStandard,
+				AA:      true,
+				TC:      true,
+				RD:      true,
+				RA:      true,
+				RCode:   message.ResponseCodeNone,
+				QDCount: 1,
+				ANCount: 0,
+				NSCount: 0,
+				ARCount: 1,
+			},
+			output: [wire.HeaderSize]byte{0x6a, 0x4c, 0x07, 0x80, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+		},
+	}
+
+	for _, tc := range tests {
+		output := wire.EncodeHeader(tc.header)
+
+		assert.Equal(t, tc.output, output)
+	}
+}
