@@ -1,6 +1,7 @@
 package wire_test
 
 import (
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func testParseDomain(t *testing.T) {
 			offset: 0,
 			domain: nil,
 			size:   nil,
-			err:    wire.ErrInvalidMessage,
+			err:    io.EOF,
 		},
 		{
 			name:   "invalid high bits of size byte",
@@ -68,7 +69,7 @@ func testParseDomain(t *testing.T) {
 			offset: 0,
 			domain: nil,
 			size:   nil,
-			err:    wire.ErrInvalidMessage,
+			err:    io.EOF,
 		},
 	}
 

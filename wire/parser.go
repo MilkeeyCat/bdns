@@ -1,36 +1,35 @@
 package wire
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 
 	"github.com/MilkeeyCat/bdns/domain"
 	"github.com/MilkeeyCat/bdns/message"
 	"github.com/MilkeeyCat/bdns/record"
 )
 
-var (
-	ErrInvalidMessage = errors.New("invalid message")
-	ErrShortMessage   = errors.New("short message")
-)
+var ErrInvalidMessage = errors.New("invalid message")
 
 type Parser struct {
-	buf    []byte
-	offset uint
+	r *bytes.Reader
 }
 
 type Option func(*Parser)
 
-func WithOffset(cursor uint) Option {
+func WithOffset(offset uint) Option {
 	return func(p *Parser) {
-		p.offset = cursor
+		if _, err := p.r.Seek(int64(offset), io.SeekStart); err != nil {
+			panic(err)
+		}
 	}
 }
 
 func NewParser(buf []byte, options ...Option) *Parser {
 	p := &Parser{
-		buf:    buf,
-		offset: 0,
+		r: bytes.NewReader(buf),
 	}
 
 	for _, opt := range options {
@@ -41,73 +40,75 @@ func NewParser(buf []byte, options ...Option) *Parser {
 }
 
 func (p *Parser) Offset() uint {
-	return p.offset
+	offset, err := p.r.Seek(0, io.SeekCurrent)
+	if err != nil {
+		panic(err)
+	}
+
+	return uint(offset)
 }
 
 func (p *Parser) ParseDomain() (domain.Domain, error) {
-	result, size, err := p.parseDomain(nil, p.offset, 0, make(map[uint16]struct{}))
-	if err != nil {
-		return domain.Domain{}, err
-	}
-
-	p.offset += uint(size)
-
-	return result, nil
+	return p.parseDomain(nil, make(map[uint16]struct{}))
 }
 
 func (p *Parser) parseDomain(
 	domain domain.Domain,
-	offset uint,
-	size uint8,
 	offsets map[uint16]struct{},
-) (domain.Domain, uint8, error) {
+) (domain.Domain, error) {
 	for {
-		if len(p.buf[offset:]) < 1 {
-			return nil, 0, ErrShortMessage
+		length, err := p.r.ReadByte()
+		if err != nil {
+			return nil, err
 		}
-
-		length := p.buf[offset]
 
 		switch length & 0b1100_0000 {
 		case 0b1100_0000:
-			if len(p.buf[offset:]) < 2 {
-				return nil, 0, ErrShortMessage
+			b, err := p.r.ReadByte()
+			if err != nil {
+				return nil, err
 			}
 
-			offset := (uint16(length&0b0011_1111) << 8) | uint16(p.buf[offset+1])
+			offset := (uint16(length&0b0011_1111) << 8) | uint16(b)
 
 			if _, ok := offsets[offset]; ok {
-				return nil, 0, ErrInvalidMessage
+				return nil, ErrInvalidMessage
 			}
 
-			if len(p.buf) <= int(offset) {
-				return nil, 0, ErrInvalidMessage
+			oldOffset := p.Offset()
+
+			if _, err := p.r.Seek(int64(offset), io.SeekStart); err != nil {
+				return nil, err
 			}
 
 			offsets[offset] = struct{}{}
 
-			domain, _, err := p.parseDomain(domain, uint(offset), size, offsets)
+			domain, err := p.parseDomain(domain, offsets)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 
-			return domain, size + 2, err
+			if _, err := p.r.Seek(int64(oldOffset), io.SeekStart); err != nil {
+				return nil, err
+			}
+
+			return domain, err
 
 		case 0:
-			if len(p.buf[offset:]) < int(length) {
-				return nil, 0, ErrShortMessage
+			buf := make([]byte, length)
+
+			if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+				return nil, err
 			}
 
-			domain = append(domain, p.buf[offset+1:offset+uint(length)+1])
-			offset += uint(length) + 1
-			size += length + 1
+			domain = append(domain, buf)
 
 			if length == 0 {
-				return domain, size, nil
+				return domain, nil
 			}
 
 		default:
-			return nil, 0, ErrInvalidMessage
+			return nil, ErrInvalidMessage
 		}
 	}
 }
@@ -118,12 +119,12 @@ func (p *Parser) ParseQuestion() (message.Question, error) {
 		return message.Question{}, err
 	}
 
-	buf := p.buf[p.offset:]
-
 	const staticDataSize = 2 + 2
 
-	if len(buf) < staticDataSize {
-		return message.Question{}, ErrShortMessage
+	var buf [staticDataSize]byte
+
+	if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+		return message.Question{}, err
 	}
 
 	queryType, err := parseQueryType(binary.BigEndian.Uint16(buf[0:]))
@@ -135,8 +136,6 @@ func (p *Parser) ParseQuestion() (message.Question, error) {
 	if err != nil {
 		return message.Question{}, err
 	}
-
-	p.offset += staticDataSize
 
 	return message.Question{
 		Name:  domain,
@@ -151,15 +150,15 @@ func (p *Parser) ParseResourceRecord() (record.Record, error) {
 		return record.Record{}, err
 	}
 
-	buf := p.buf[p.offset:]
-
 	const staticDataSize = 2 + 2 + 4 + 2
 
-	if len(buf) < staticDataSize {
-		return record.Record{}, ErrShortMessage
+	var buf [staticDataSize]byte
+
+	if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+		return record.Record{}, err
 	}
 
-	ty, err := parseType(binary.BigEndian.Uint16(buf))
+	ty, err := parseType(binary.BigEndian.Uint16(buf[0:]))
 	if err != nil {
 		return record.Record{}, err
 	}
@@ -171,35 +170,34 @@ func (p *Parser) ParseResourceRecord() (record.Record, error) {
 
 	ttl := binary.BigEndian.Uint32(buf[4:])
 	rdLength := binary.BigEndian.Uint16(buf[8:])
+	data := make([]byte, rdLength)
 
-	if len(buf) < int(rdLength)+staticDataSize {
-		return record.Record{}, ErrShortMessage
+	if _, err := io.ReadFull(p.r, data); err != nil {
+		return record.Record{}, err
 	}
-
-	p.offset += staticDataSize + uint(rdLength)
 
 	return record.Record{
 		Name:  domain,
 		Type:  ty,
 		Class: class,
 		TTL:   ttl,
-		Data:  buf[staticDataSize : rdLength+staticDataSize],
+		Data:  data,
 	}, nil
 }
 
 func (p *Parser) ParseMessage() (message.Message, error) {
-	if len(p.buf) < HeaderSize {
-		return message.Message{}, ErrShortMessage
+	var buf [HeaderSize]byte
+
+	if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+		return message.Message{}, err
 	}
 
-	header, err := ParseHeader([HeaderSize]byte(p.buf[:HeaderSize]))
+	header, err := ParseHeader(buf)
 	if err != nil {
 		return message.Message{}, err
 	}
 
 	questions := make([]message.Question, header.QDCount)
-
-	p.offset = HeaderSize
 
 	for i := range header.QDCount {
 		question, err := p.ParseQuestion()
@@ -225,7 +223,7 @@ func (p *Parser) ParseMessage() (message.Message, error) {
 		return message.Message{}, err
 	}
 
-	if len(p.buf[p.offset:]) > 0 {
+	if p.r.Len() > 0 {
 		return message.Message{}, ErrInvalidMessage
 	}
 
