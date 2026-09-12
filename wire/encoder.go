@@ -185,7 +185,7 @@ func (e *Encoder) encodeQuestions(questions []message.Question) (uint16, bool, e
 		}
 	}
 
-	return 0, false, nil
+	return uint16(len(questions)), false, nil
 }
 
 func (e *Encoder) encodeRRs(rrs []record.Record) (uint16, bool, error) {
@@ -202,7 +202,7 @@ func (e *Encoder) encodeRRs(rrs []record.Record) (uint16, bool, error) {
 		}
 	}
 
-	return 0, false, nil
+	return uint16(len(rrs)), false, nil
 }
 
 type domainCompressor struct {
