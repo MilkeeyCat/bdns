@@ -1,0 +1,8 @@
+@    IN    SOA    ns1.local. root.local (
+                             2026091900
+                             3600
+                             1800
+                             604800
+                             86400 )
+
+           NS     ns1.local.
