@@ -293,10 +293,6 @@ func encodeType(ty record.Type) uint16 {
 		return 1
 	case record.TypeNS:
 		return 2
-	case record.TypeMD:
-		return 3
-	case record.TypeMF:
-		return 4
 	case record.TypeCNAME:
 		return 5
 	case record.TypeSOA:

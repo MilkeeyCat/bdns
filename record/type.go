@@ -9,12 +9,6 @@ const (
 	// Authoritative name server.
 	TypeNS
 
-	// Mail destination (Obsolete - use [TypeMX]).
-	TypeMD
-
-	// Mail forwarder (Obsolete - use [TypeMX]).
-	TypeMF
-
 	// Canonical name for an alias.
 	TypeCNAME
 

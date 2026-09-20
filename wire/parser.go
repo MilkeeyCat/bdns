@@ -257,10 +257,6 @@ func parseType(code uint16) (record.Type, error) {
 		return record.TypeA, nil
 	case 2:
 		return record.TypeNS, nil
-	case 3:
-		return record.TypeMD, nil
-	case 4:
-		return record.TypeMF, nil
 	case 5:
 		return record.TypeCNAME, nil
 	case 6:
