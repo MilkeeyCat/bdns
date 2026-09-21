@@ -85,6 +85,169 @@ func (e *Encoder) EncodeQuestion(question message.Question) error {
 	return nil
 }
 
+func (e *Encoder) encodeCharString(s string) error {
+	if err := e.buf.WriteByte(byte(len(s))); err != nil {
+		return err
+	}
+
+	if _, err := e.buf.WriteString(s); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *Encoder) encodeUint32(v uint32) error {
+	buf := e.buf.AvailableBuffer()
+
+	buf = binary.BigEndian.AppendUint32(buf, v)
+
+	if _, err := e.buf.Write(buf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *Encoder) encodeRRData(data record.Data) error {
+	offset := len(e.Bytes())
+	const sizeLen = 2
+
+	_, _ = e.buf.Write(make([]byte, sizeLen))
+
+	switch data := data.(type) {
+	case record.CNAMEData:
+		if err := e.EncodeDomain(data.CNAME); err != nil {
+			return err
+		}
+
+	case record.HINFOData:
+		if err := e.encodeCharString(data.CPU); err != nil {
+			return err
+		}
+
+		if err := e.encodeCharString(data.OS); err != nil {
+			return err
+		}
+
+	case record.MBData:
+		if err := e.EncodeDomain(data.MADName); err != nil {
+			return err
+		}
+
+	case record.MGData:
+		if err := e.EncodeDomain(data.MGMName); err != nil {
+			return err
+		}
+
+	case record.MINFOData:
+		if err := e.EncodeDomain(data.RMailbx); err != nil {
+			return err
+		}
+
+		if err := e.EncodeDomain(data.EMailbx); err != nil {
+			return err
+		}
+
+	case record.MRData:
+		if err := e.EncodeDomain(data.NewName); err != nil {
+			return err
+		}
+
+	case record.MXData:
+		buf := e.buf.AvailableBuffer()
+
+		buf = binary.BigEndian.AppendUint16(buf, data.Preference)
+
+		if _, err := e.buf.Write(buf); err != nil {
+			return err
+		}
+
+		if err := e.EncodeDomain(data.Exchange); err != nil {
+			return err
+		}
+
+	case record.NULLData:
+		if _, err := e.buf.Write(data.Data); err != nil {
+			return err
+		}
+
+	case record.NSData:
+		if err := e.EncodeDomain(data.NSDName); err != nil {
+			return err
+		}
+
+	case record.PTRData:
+		if err := e.EncodeDomain(data.PTRDName); err != nil {
+			return err
+		}
+
+	case record.SOAData:
+		if err := e.EncodeDomain(data.MName); err != nil {
+			return err
+		}
+
+		if err := e.EncodeDomain(data.RName); err != nil {
+			return err
+		}
+
+		if err := e.encodeUint32(data.Serial); err != nil {
+			return err
+		}
+
+		if err := e.encodeUint32(data.Refresh); err != nil {
+			return err
+		}
+
+		if err := e.encodeUint32(data.Retry); err != nil {
+			return err
+		}
+
+		if err := e.encodeUint32(data.Expire); err != nil {
+			return err
+		}
+
+		if err := e.encodeUint32(data.Minimum); err != nil {
+			return err
+		}
+
+	case record.TXTData:
+		for _, s := range data.Data {
+			if err := e.encodeCharString(s); err != nil {
+				return err
+			}
+		}
+
+	case record.AData:
+		if _, err := e.buf.Write(data.Address.AsSlice()); err != nil {
+			return err
+		}
+
+	case record.WKSData:
+		if _, err := e.buf.Write(data.Address.AsSlice()); err != nil {
+			return err
+		}
+
+		if err := e.buf.WriteByte(data.Protocol); err != nil {
+			return err
+		}
+
+		if _, err := e.buf.Write(data.Bitmap); err != nil {
+			return err
+		}
+
+	default:
+		panic(fmt.Sprintf("unexpected record.Data: %T", data))
+	}
+
+	binary.BigEndian.PutUint16(
+		e.buf.Bytes()[offset:],
+		uint16(len(e.Bytes())-offset-sizeLen),
+	)
+
+	return nil
+}
+
 func (e *Encoder) EncodeResourceRecord(rr record.Record) error {
 	if err := e.EncodeDomain(rr.Name); err != nil {
 		return err
@@ -95,11 +258,9 @@ func (e *Encoder) EncodeResourceRecord(rr record.Record) error {
 	buf = binary.BigEndian.AppendUint16(buf, encodeType(rr.Type))
 	buf = binary.BigEndian.AppendUint16(buf, encodeClass(rr.Class))
 	buf = binary.BigEndian.AppendUint32(buf, rr.TTL)
-	buf = binary.BigEndian.AppendUint16(buf, uint16(len(rr.Data)))
 	_, _ = e.buf.Write(buf)
-	_, _ = e.buf.Write(rr.Data)
 
-	return nil
+	return e.encodeRRData(rr.Data)
 }
 
 func (e *Encoder) EncodeMessage(msg message.Message) error {

@@ -1,4 +1,4 @@
-@    IN    SOA    ns1.local. root.local (
+@    IN    SOA    ns1.local. root.local. (
                              2026091900
                              3600
                              1800
@@ -6,3 +6,18 @@
                              86400 )
 
            NS     ns1.local.
+
+a.dummy.local.    HINFO    "Intel Pentium" "Goober OS"
+                  NULL     \# 5 0102030405
+                  TXT      str1 str2 str3
+                  A        5.6.7.8
+                  WKS      9.10.11.12 TCP ftp telnet http
+
+b.dummy.local.    CNAME    a.dummy.local.
+
+c.dummy.local.    MB       a.dummy.local.
+                  MG       a.dummy.local.
+                  MINFO    a.dummy.local. a.dummy.local.
+                  MR       a.dummy.local.
+                  MX       69 a.dummy.local.
+                  PTR      a.dummy.local.

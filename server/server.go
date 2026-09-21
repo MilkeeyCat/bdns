@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 
 	"golang.org/x/sync/errgroup"
 
@@ -177,7 +178,9 @@ func (s *Server) processMessage(buf []byte) ([]byte, error) {
 				Type:  record.TypeA,
 				Class: record.ClassIN,
 				TTL:   300,
-				Data:  []byte{1, 2, 3, 4},
+				Data: record.AData{
+					Address: netip.AddrFrom4([4]byte{1, 2, 3, 4}),
+				},
 			},
 		}
 	}

@@ -7,5 +7,5 @@ type Record struct {
 	Type  Type
 	Class Class
 	TTL   uint32
-	Data  []byte
+	Data  Data
 }

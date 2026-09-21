@@ -5,13 +5,17 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"net/netip"
 
 	"github.com/MilkeeyCat/bdns/domain"
 	"github.com/MilkeeyCat/bdns/message"
 	"github.com/MilkeeyCat/bdns/record"
 )
 
-var ErrInvalidMessage = errors.New("invalid message")
+var (
+	ErrInvalidMessage        = errors.New("invalid message")
+	ErrUnsupportedRecordData = errors.New("unsupported resource data")
+)
 
 type Parser struct {
 	r *bytes.Reader
@@ -144,6 +148,268 @@ func (p *Parser) ParseQuestion() (message.Question, error) {
 	}, nil
 }
 
+func (p *Parser) parseCharString() (string, error) {
+	size, err := p.r.ReadByte()
+	if err != nil {
+		return "", err
+	}
+
+	buf := make([]byte, size)
+
+	if _, err := io.ReadFull(p.r, buf); err != nil {
+		return "", err
+	}
+
+	return string(buf), nil
+}
+
+func (p *Parser) parseUint32() (uint32, error) {
+	var buf [4]byte
+
+	if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint32(buf[:]), nil
+}
+
+func (p *Parser) parseRRData(
+	ty record.Type,
+	class record.Class,
+	length uint16,
+) (record.Data, error) {
+	offset := p.Offset()
+	var data record.Data
+
+	switch {
+	case ty == record.TypeCNAME:
+		cname, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.CNAMEData{
+			CNAME: cname,
+		}
+
+	case ty == record.TypeHINFO:
+		cpu, err := p.parseCharString()
+		if err != nil {
+			return nil, err
+		}
+
+		os, err := p.parseCharString()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.HINFOData{
+			CPU: cpu,
+			OS:  os,
+		}
+
+	case ty == record.TypeMB:
+		madName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.MBData{
+			MADName: madName,
+		}
+
+	case ty == record.TypeMG:
+		mgmName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.MGData{
+			MGMName: mgmName,
+		}
+
+	case ty == record.TypeMINFO:
+		rMailbx, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		eMailbx, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.MINFOData{
+			RMailbx: rMailbx,
+			EMailbx: eMailbx,
+		}
+
+	case ty == record.TypeMR:
+		newName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.MRData{
+			NewName: newName,
+		}
+
+	case ty == record.TypeMX:
+		var buf [2]byte
+
+		if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+			return nil, err
+		}
+
+		exchange, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.MXData{
+			Preference: binary.BigEndian.Uint16(buf[:]),
+			Exchange:   exchange,
+		}
+
+	case ty == record.TypeNULL:
+		buf := make([]byte, length)
+
+		if _, err := io.ReadFull(p.r, buf); err != nil {
+			return nil, err
+		}
+
+		data = record.NULLData{
+			Data: buf,
+		}
+
+	case ty == record.TypeNS:
+		nsdName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.NSData{
+			NSDName: nsdName,
+		}
+
+	case ty == record.TypePTR:
+		domain, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.PTRData{
+			PTRDName: domain,
+		}
+
+	case ty == record.TypeSOA:
+		mName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		rName, err := p.ParseDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		serial, err := p.parseUint32()
+		if err != nil {
+			return nil, err
+		}
+
+		refresh, err := p.parseUint32()
+		if err != nil {
+			return nil, err
+		}
+
+		retry, err := p.parseUint32()
+		if err != nil {
+			return nil, err
+		}
+
+		expire, err := p.parseUint32()
+		if err != nil {
+			return nil, err
+		}
+
+		minimum, err := p.parseUint32()
+		if err != nil {
+			return nil, err
+		}
+
+		data = record.SOAData{
+			MName:   mName,
+			RName:   rName,
+			Serial:  serial,
+			Refresh: refresh,
+			Retry:   retry,
+			Expire:  expire,
+			Minimum: minimum,
+		}
+
+	case ty == record.TypeTXT:
+		var strs []string
+
+		for p.Offset() < offset+uint(length) {
+			str, err := p.parseCharString()
+			if err != nil {
+				return nil, err
+			}
+
+			strs = append(strs, str)
+		}
+
+		data = record.TXTData{
+			Data: strs,
+		}
+
+	case ty == record.TypeA && class == record.ClassIN:
+		var buf [4]byte
+
+		if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+			return nil, err
+		}
+
+		data = record.AData{
+			Address: netip.AddrFrom4(buf),
+		}
+
+	case ty == record.TypeWKS && class == record.ClassIN:
+		var buf [4]byte
+
+		if _, err := io.ReadFull(p.r, buf[:]); err != nil {
+			return nil, err
+		}
+
+		protocol, err := p.r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+
+		bitmap := make([]byte, length-4-1)
+
+		if _, err := io.ReadFull(p.r, bitmap); err != nil {
+			return nil, err
+		}
+
+		data = record.WKSData{
+			Address:  netip.AddrFrom4(buf),
+			Protocol: protocol,
+			Bitmap:   bitmap,
+		}
+
+	default:
+		return nil, ErrUnsupportedRecordData
+	}
+
+	if p.Offset() != offset+uint(length) {
+		return nil, ErrInvalidMessage
+	}
+
+	return data, nil
+}
+
 func (p *Parser) ParseResourceRecord() (record.Record, error) {
 	domain, err := p.ParseDomain()
 	if err != nil {
@@ -170,9 +436,8 @@ func (p *Parser) ParseResourceRecord() (record.Record, error) {
 
 	ttl := binary.BigEndian.Uint32(buf[4:])
 	rdLength := binary.BigEndian.Uint16(buf[8:])
-	data := make([]byte, rdLength)
-
-	if _, err := io.ReadFull(p.r, data); err != nil {
+	data, err := p.parseRRData(ty, class, rdLength)
+	if err != nil {
 		return record.Record{}, err
 	}
 
