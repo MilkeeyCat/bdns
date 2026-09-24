@@ -12,10 +12,7 @@ import (
 	"github.com/MilkeeyCat/bdns/record"
 )
 
-var (
-	ErrInvalidMessage        = errors.New("invalid message")
-	ErrUnsupportedRecordData = errors.New("unsupported resource data")
-)
+var ErrInvalidMessage = errors.New("invalid message")
 
 type Parser struct {
 	r *bytes.Reader
@@ -400,7 +397,7 @@ func (p *Parser) parseRRData(
 		}
 
 	default:
-		return nil, ErrUnsupportedRecordData
+		return nil, record.ErrUnsupportedRecordData
 	}
 
 	if p.Offset() != offset+uint(length) {

@@ -5,3 +5,6 @@ enable = ["gofmt"]
 
 [linters]
 enable = ["errname", "exhaustive"]
+
+[linters.settings.exhaustive]
+default-signifies-exhaustive = true

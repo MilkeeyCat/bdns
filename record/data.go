@@ -1,10 +1,13 @@
 package record
 
 import (
+	"errors"
 	"net/netip"
 
 	"github.com/MilkeeyCat/bdns/domain"
 )
+
+var ErrUnsupportedRecordData = errors.New("unsupported resource data")
 
 type Data interface {
 	data()
